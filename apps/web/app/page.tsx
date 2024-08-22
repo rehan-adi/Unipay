@@ -15,7 +15,7 @@ export default function Home() {
           priority
         />
         <ol>
-          <li>
+          <li className="text-6xl text-pink-700">
             Get started by editing <code>app/page.tsx</code>
           </li>
           <li>Save and see your changes instantly.</li>
