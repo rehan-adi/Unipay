@@ -13,6 +13,26 @@
     "dev": {
       "cache": false,
       "persistent": true
+    },
+    "db:generate": {
+      "cache": false,
+      "dependsOn": ["build"],
+      "outputs": ["node_modules/.prisma"]
+    },
+    "db:push": {
+      "cache": false,
+      "dependsOn": ["build"],
+      "inputs": ["prisma/schema.prisma"]
+    },
+    "db:migrate": {
+      "cache": false,
+      "dependsOn": ["build"],
+      "inputs": ["prisma/migrations/**"]
+    },
+    "db:studio": {
+      "cache": false,
+      "dependsOn": ["build"],
+      "persistent": true
     }
   }
 }
