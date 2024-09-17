@@ -1,67 +1,77 @@
 import bcrypt from "bcrypt";
 import db from "@repo/db/client";
-import CredentialsProvider from "next-auth/providers/credentials"
+import CredentialsProvider from "next-auth/providers/credentials";
+import { signinValidation } from "../../../../validations/auth.validation";
+import { ZodError } from "zod";
 
 export const authOptions = {
-    providers: [
-      CredentialsProvider({
-          name: 'Credentials',
-          credentials: {
-            phone: { label: "Phone number", type: "text", placeholder: "Enter your Phone number" },
-            password: { label: "Password", type: "password", placeholder: "Enter your Password" }
-          },
-          async authorize(credentials: any) {
-            // Do zod validation, OTP validation here
-            const hashedPassword = await bcrypt.hash(credentials.password, 10);
-            const existingUser = await db.user.findFirst({
-                where: {
-                    number: credentials.phone
-                }
-            });
+  providers: [
+    CredentialsProvider({
+      name: "Credentials",
+      credentials: {
+        phone: { label: "Phone number", type: "text", placeholder: "Enter your Phone number" },
+        password: { label: "Password", type: "password", placeholder: "Enter your Password" }
+      },
+      async authorize(credentials) {
+        try {
+          // Zod validation
+          const parsedData = signinValidation.parse({
+            phone: credentials?.phone,
+            password: credentials?.password
+          });
 
-            if (existingUser) {
-                const passwordValidation = await bcrypt.compare(credentials.password, existingUser.password);
-                if (passwordValidation) {
-                    return {
-                        id: existingUser.id.toString(),
-                        name: existingUser.username,
-                        email: existingUser.number
-                    }
-                }
-                return null;
+          // Check if the user exists in the database
+          const existingUser = await db.user.findFirst({
+            where: { number: parsedData.phone }
+          });
+
+          if (existingUser) {
+            const passwordValidation = await bcrypt.compare(parsedData.password, existingUser.password);
+            if (passwordValidation) {
+              return {
+                id: existingUser.id.toString(),
+                name: existingUser.username,
+                email: existingUser.number
+              };
             }
+            return null;
+          }
 
-            try {
-                const user = await db.user.create({
-                    data: {
-                        number: credentials.phone,
-                        password: hashedPassword,
-                        username: credentials.username, 
-                        email: credentials.email,   
-                    }
-                });
-            
-                return {
-                    id: user.id.toString(),
-                    username: user.username,
-                    email: user.number
-                }
-            } catch(e) {
-                console.error(e);
+          // If user doesn't exist, create a new user
+          const hashedPassword = await bcrypt.hash(parsedData.password, 10);
+          const newUser = await db.user.create({
+            data: {
+              number: parsedData.phone,
+              password: hashedPassword,
+              username: '',
+              email: '',
             }
+          });
 
-            return null
-          },
-        })
-    ],
-    secret: process.env.JWT_SECRET || "secret",
-    callbacks: {
-        // TODO: can u fix the type here? Using any is bad
-        async session({ token, session }: any) {
-            session.user.id = token.sub
+          return {
+            id: newUser.id.toString(),
+            username: newUser.username,
+            email: newUser.number
+          };
 
-            return session
+        } catch (error) {
+          if (error instanceof ZodError) {
+            console.error("Validation error:", error.errors);
+            return null;
+          }
+          console.error("Unexpected error during authorization:", error);
+          return null;
         }
+      }
+    })
+  ],
+  secret: process.env.JWT_SECRET || "secret",
+  callbacks: {
+    async session({ token, session }: { token: any, session: any }) { // Improved typing
+      if (token?.sub) {
+        session.user.id = token.sub;
+      }
+      return session;
     }
   }
- 
+};
